@@ -20,6 +20,31 @@ func Read(req *http.Request, dst interface{}, whitelist []string) error {
 		return err
 	}
 
+	fields := extract(dst)
+
+	for _, name := range whitelist {
+		field, ok := fields[name]
+		if !ok {
+			continue
+		}
+
+		raw, ok := tmp[name]
+		if !ok {
+			continue
+		}
+
+		val := reflect.New(field.Type())
+		if err := j.Unmarshal(raw, val.Interface()); err != nil {
+			return err
+		}
+		field.Set(val.Elem())
+	}
+
+	return nil
+}
+
+func extract(dst interface{}) map[string]reflect.Value {
+
 	t := reflect.TypeOf(dst)
 	v := reflect.ValueOf(dst)
 
@@ -43,26 +68,29 @@ func Read(req *http.Request, dst interface{}, whitelist []string) error {
 			name = f.Name
 		}
 
-		fields[name] = v.Field(i)
+		fv := v.Field(i)
+
+		if f.Anonymous { // embedded struct
+			ft := f.Type
+			if ft.Kind() == reflect.Ptr {
+				ft = ft.Elem()
+				fv = fv.Elem()
+			}
+
+			if !fv.IsValid() { // eg. is nil
+				// init embedded struct
+				fv = reflect.New(ft)
+				v.Field(i).Set(fv)
+				fv = fv.Elem()
+			}
+
+			for k, v := range extract(fv.Addr().Interface()) {
+				fields[k] = v
+			}
+		}
+
+		fields[name] = fv
 	}
 
-	for _, name := range whitelist {
-		field, ok := fields[name]
-		if !ok {
-			continue
-		}
-
-		raw, ok := tmp[name]
-		if !ok {
-			continue
-		}
-
-		val := reflect.New(field.Type())
-		if err := j.Unmarshal(raw, val.Interface()); err != nil {
-			return err
-		}
-		field.Set(val.Elem())
-	}
-
-	return nil
+	return fields
 }
