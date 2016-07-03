@@ -2,6 +2,7 @@ package json
 
 import (
 	j "encoding/json"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -16,7 +17,11 @@ func Read(req *http.Request, dst interface{}, whitelist []string) error {
 	defer body.Close()
 
 	dec := j.NewDecoder(body)
-	if err := dec.Decode(&tmp); err != nil {
+	err := dec.Decode(&tmp)
+	switch err {
+	case io.EOF:
+		return nil
+	default:
 		return err
 	}
 
