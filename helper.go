@@ -18,11 +18,13 @@ func Read(req *http.Request, dst interface{}, whitelist []string) error {
 
 	dec := j.NewDecoder(body)
 	err := dec.Decode(&tmp)
-	switch err {
-	case io.EOF:
-		return nil
-	default:
-		return err
+	if err != nil {
+		switch err {
+		case io.EOF:
+			return nil
+		default:
+			return err
+		}
 	}
 
 	fields := extract(dst)
